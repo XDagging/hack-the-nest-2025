@@ -63,7 +63,7 @@ describe("hackthenest", () => {
 // Anchor MethodsBuilder
 
   
-//   const program = anchor.workspace.hackthenest as Program<Hackthenest>;
+  const program = anchor.workspace.hackthenest as Program<Hackthenest>;
 //   console.log("goodbye")
   it("Is initialized!", async () => {
     // Add your test here.

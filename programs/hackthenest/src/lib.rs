@@ -7,6 +7,10 @@ use anchor_spl::token_interface::{
     MintTo,      // CPI struct for minting
     TransferChecked, // CPI struct for transfers
 };
+use anchor_lang::prelude::Clock;
+
+
+const AUTHORITY_PUBKEY: &str = &"7TrgC92RhkRhxmKTFvjaeaujGkobt2Pp2Y4UKcpG4wFw";
 
 declare_id!("GCWPmqUDrnKuEG6qVQ556m2W6N1LkT5qGuqdT4LyebSS");
 
@@ -14,13 +18,40 @@ declare_id!("GCWPmqUDrnKuEG6qVQ556m2W6N1LkT5qGuqdT4LyebSS");
 pub mod hackthenest {
     use super::*;
 
-    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+    pub fn initialize(ctx: Context<InitializeRegistry>) -> Result<()> {
+        
+        // Only the user should use initialize
+        
+        if ctx.accounts.user.key().to_string() == AUTHORITY_PUBKEY {
+            // ctx
+            let registry = &mut ctx.accounts.registry;
+
+
+            registry.authority = ctx.accounts.user.key();
+
+            registry.keys = Vec::new();
+
+
+            
+        } else {
+            return Err(HackError::Unauthorized.into());
+        }
+
+
+        
+
+
+
         msg!("Program initialized: {:?}", ctx.program_id);
         Ok(())
     }
 
     pub fn create_mint(ctx: Context<CreateMint>) -> Result<()> {
+
+
+        
         msg!("Created Mint: {:?}", ctx.accounts.mint.key());
+        
         Ok(())
     }
 
@@ -50,8 +81,13 @@ pub mod hackthenest {
     }
 
     pub fn buy_tokens(ctx: Context<BuyTokens>, amount: u64) -> Result<()> {
+        // let registry = &mut ctx.accounts.registry;
         // 1️⃣ Transfer SOL to treasury PDA
-        let lamports = amount; // TODO: implement token pricing logic
+        let price_per_token: u64 = 10_000_000; // 0.01 SOL in lamports
+        let lamports: u64 = amount
+        .checked_mul(price_per_token)
+        .expect("Overflow when calculating lamports");
+
         let ix = anchor_lang::solana_program::system_instruction::transfer(
             &ctx.accounts.buyer.key(),
             &ctx.accounts.treasury.key(),
@@ -82,14 +118,125 @@ pub mod hackthenest {
         let cpi_ctx = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer_seeds);
         token_interface::mint_to(cpi_ctx, amount)?;
 
+
+        if ctx.accounts.registry.keys.contains(ctx.accounts.buyer.key) == false {
+            ctx.accounts.registry.keys.push(*ctx.accounts.buyer.key)
+        }
+
+        
+
         Ok(())
     }
+
+
+
+    pub fn withdraw_tokens(ctx: Context<SellTokens>, amount: u64) -> Result<()> {
+
+        // Make it so you can't withdraw whenever;
+
+
+
+
+
+
+
+
+
+        Ok(())
+    }
+
+    // fn pick_index(list_len: usize) -> Result<usize> {
+       
+
+    //     Ok(idx)
+    // }
+
+
+    pub fn do_raffle(ctx: Context<DoRaffle>) -> Result<()> {
+        let raffle_account = &ctx.accounts.user;
+
+        if raffle_account.key.to_string() == AUTHORITY_PUBKEY {
+            let list_len = ctx.accounts.registry.keys.len();
+            // This means that the user is the right user (the one with the cronjob)
+            let clock = Clock::get()?;
+            let timestamp = clock.unix_timestamp;
+                 // Get cluster time
+            let ts = clock.unix_timestamp;         // i64
+
+    // Convert timestamp to positive u64 (avoid negatives)
+            let seed = ts.unsigned_abs();
+
+    // Map into range 0..list_len
+            let idx = (seed % list_len as u64) as usize;
+
+            let random_num: usize = idx as usize;
+
+
+            // The amount you pay doesn't increase your chances right now. It's okay. I'll add that feature later.
+
+            // This represents the total amount of tokens
+            let winner = ctx.accounts.registry.keys[random_num];
+
+            // winner.
+            
+            
+
+            // ctx.accounts.registry.keys
+
+
+
+
+
+            
+
+
+
+        }
+
+
+        // First, let's confirm that this is the right public Key that we want
+        Ok(())
+    }
+    
+
+
+
+
+
+
 }
 
 // ================== ACCOUNT STRUCTS ==================
 
+// #[derive(Accounts)]
+// pub struct Initialize<'info> {
+//     #[account(mut)]
+//     pub user: Signer<'info>, // Example: whoever calls the function
+//     pub system_program: Program<'info, System>,
+//     pub registry: Account<'info, Registry>,
+
+// }
+
 #[derive(Accounts)]
-pub struct Initialize {}
+pub struct InitializeRegistry<'info> {
+    #[account(init, payer = user, space = 8 + 32 + 32 * 1000,seeds = [b"registry_seed"], bump)]
+    pub registry: Account<'info, Registry>,
+
+    #[account(mut)]
+    pub user: Signer<'info>, // the authority
+
+    pub system_program: Program<'info, System>,
+}
+
+
+
+#[account]
+pub struct Registry {
+    // Example field: you can adjust as needed
+    pub authority: Pubkey,
+    pub keys: Vec<Pubkey>,
+    // Add more fields as needed for your registry logic
+}
 
 /// ✅ Create a new mint account (must use standard `Account` type)
 #[derive(Accounts)]
@@ -160,6 +307,9 @@ pub struct BuyTokens<'info> {
     #[account(seeds = [b"mint_auth"], bump)]
     pub mint_authority: UncheckedAccount<'info>,
 
+    #[account(mut, seeds = [b"registry_seed"], bump)]
+    pub registry: Account<'info, Registry>,
+
     /// CHECK: Treasury PDA that holds collected SOL
     #[account(mut, seeds = [b"treasury"], bump)]
     pub treasury: UncheckedAccount<'info>,
@@ -167,3 +317,60 @@ pub struct BuyTokens<'info> {
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
 }
+
+
+#[derive(Accounts)]
+pub struct SellTokens<'info> {
+
+     #[account(mut)]
+    pub seller: Signer<'info>,
+
+    #[account(mut)]
+    pub mint: InterfaceAccount<'info, Mint>,
+
+    #[account(mut)]
+    pub seller_token_account: InterfaceAccount<'info, TokenAccount>,
+
+    /// CHECK: PDA declared as mint authority
+    #[account(seeds = [b"mint_auth"], bump)]
+    pub mint_authority: UncheckedAccount<'info>,
+
+    #[account(mut, seeds = [b"registry_seed"], bump)]
+    pub registry: Account<'info, Registry>,
+
+
+    /// CHECK: Treasury PDA that holds collected SOL
+    #[account(mut, seeds = [b"treasury"], bump)]
+    pub treasury: UncheckedAccount<'info>,
+
+    pub token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+
+}
+
+
+
+#[derive(Accounts)]
+pub struct DoRaffle<'info> {
+    #[account(mut)]
+    pub user: Signer<'info>, // Example: whoever calls the function
+    pub system_program: Program<'info, System>,
+    
+    
+
+    #[account(mut)]
+    pub mint: InterfaceAccount<'info, Mint>, // CPI usage
+    
+
+    #[account(seeds = [b"registry_seed"], bump)]
+    pub registry: Account<'info, Registry>,
+  
+}
+
+
+#[error_code]
+pub enum HackError {
+    #[msg("Unauthorized user")]
+    Unauthorized,
+}
+
