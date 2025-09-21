@@ -12,7 +12,7 @@ hackthenest = "GCWPmqUDrnKuEG6qVQ556m2W6N1LkT5qGuqdT4LyebSS"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

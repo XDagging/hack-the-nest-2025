@@ -151,53 +151,20 @@ pub fn stake_coin(ctx: Context<StakeCoins>, amount: u64) -> Result<()> {
     Ok(())
 }
 
-    pub fn withdraw_tokens(ctx: Context<SellTokens>) -> Result<()> {
-    let seller_token_account = &ctx.accounts.seller_token_account;
-    let mint = &ctx.accounts.mint;
-    let seller = &ctx.accounts.seller;
-    let treasury = &ctx.accounts.treasury;
+    pub fn withdraw_tokens(ctx: Context<SellTokens>, amount: u64) -> Result<()> {
 
-    // 1. Get the amount of tokens the seller owns
-    let amount_to_withdraw = seller_token_account.amount;
+        // Make it so you can't withdraw whenever;
 
-    require!(amount_to_withdraw > 0, CustomError::NoTokensToWithdraw);
 
-    // 2. Define the price per token (in lamports)
-    let price_per_token: u64 = 10_000_000; // 0.01 SOL
 
-    // 3. Calculate total SOL owed
-    let total_sol = amount_to_withdraw.checked_mul(price_per_token)
-        .ok_or(CustomError::Overflow)?;
 
-    // 4. Transfer SOL from treasury to seller
-    let ix = anchor_lang::solana_program::system_instruction::transfer(
-        &treasury.key(),
-        &seller.key(),
-        total_sol,
-    );
-    anchor_lang::solana_program::program::invoke(
-        &ix,
-        &[
-            treasury.to_account_info(),
-            seller.to_account_info(),
-            ctx.accounts.system_program.to_account_info(),
-        ],
-    )?;
 
-    // 5. Burn all tokens from seller's token account
-    let cpi_ctx = CpiContext::new(
-        ctx.accounts.token_program.to_account_info(),
-        token_interface::Burn {
-            mint: mint.to_account_info(),
-            from: seller_token_account.to_account_info(),
-            authority: ctx.accounts.seller.to_account_info(),
-        },
-    );
-    token_interface::burn(cpi_ctx, amount_to_withdraw)?;
 
-    Ok(())
-}
 
+
+
+        Ok(())
+    }
 
     // fn pick_index(list_len: usize) -> Result<usize> {
        
@@ -244,13 +211,7 @@ pub fn do_raffle(ctx: Context<DoRaffle>) -> Result<()> {
 
 #[derive(Accounts)]
 pub struct InitializeRegistry<'info> {
-    #[account(
-    init,
-    payer = user,
-    space = 8 + 32 + 4 + 32 * 100, // store up to 100 pubkeys
-    seeds = [b"registry_seed"],
-    bump
-)]
+    #[account(init, payer = user, space = 8 + 32 + 32 * 1000,seeds = [b"registry_seed"], bump)]
     pub registry: Account<'info, Registry>,
 
     #[account(mut)]
@@ -352,7 +313,8 @@ pub struct BuyTokens<'info> {
 
 #[derive(Accounts)]
 pub struct SellTokens<'info> {
-    #[account(mut)]
+
+     #[account(mut)]
     pub seller: Signer<'info>,
 
     #[account(mut)]
@@ -368,12 +330,14 @@ pub struct SellTokens<'info> {
     #[account(mut, seeds = [b"registry_seed"], bump)]
     pub registry: Account<'info, Registry>,
 
+
     /// CHECK: Treasury PDA that holds collected SOL
     #[account(mut, seeds = [b"treasury"], bump)]
     pub treasury: UncheckedAccount<'info>,
 
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
+
 }
 
 #[derive(Accounts)]
@@ -416,13 +380,4 @@ pub enum HackError {
 pub enum ErrorCode {
     #[msg("Invalid Winner")]
     InvalidWinner,
-}
-
-#[error_code]
-pub enum CustomError {
-    #[msg("You have no tokens to withdraw.")]
-    NoTokensToWithdraw,
-
-    #[msg("Calculation overflow.")]
-    Overflow,
 }
